@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Portfolio brain and project memory (private, per-user data)
+.portfolio-brain/
+.project-memory/
+
+# Docs and planning artifacts (internal / not open-source material)
+docs/
+TODOS.md
+CLAUDE.md
+
+# gstack internal planning data
+.gstack/
+
+# Dev server logs
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+
+# Electron distribution artifacts
+out/
+release/
