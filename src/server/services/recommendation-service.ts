@@ -71,7 +71,7 @@ const decaySignal = (signal: SignalRecord): number => {
     (Date.now() - new Date(signal.createdAt).getTime()) / (1000 * 60 * 60 * 24)
   );
 
-  const decayFactor = Math.max(0.35, 1 - ageInDays * 0.04);
+  const decayFactor = Math.max(0.35, 1 - ageInDays * 0.02);
   return signal.freshnessScore * signal.confidence * decayFactor;
 };
 
@@ -87,6 +87,14 @@ const scoreSignalAgainstAction = (
   const ideaBonus = signal.type === "idea" && action === "build" ? 0.12 : 0;
   const readinessBonus =
     signal.type === "repo-state" && action === "build" && haystack.includes("package manifest") ? 0.12 : 0;
+  const activityBonus =
+    signal.type === "repo-state" && haystack.includes("active work sessions")
+      ? action === "build"
+        ? 0.22
+        : action === "archive" || action === "kill"
+          ? -0.18
+          : 0
+      : 0;
   const emptyRepoPenalty =
     signal.type === "repo-state" && haystack.includes("no source files yet")
       ? action === "build"
@@ -103,6 +111,7 @@ const scoreSignalAgainstAction = (
     noteBonus +
     ideaBonus +
     readinessBonus +
+    activityBonus +
     emptyRepoPenalty
   );
 };

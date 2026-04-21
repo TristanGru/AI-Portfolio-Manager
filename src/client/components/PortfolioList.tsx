@@ -91,7 +91,6 @@ export function PortfolioList({ projects, selectedProjectId, onSelect }: Props) 
               <p className="project-card-score">
                 Momentum {project.momentumScore} · Top move {project.topRecommendationType}
               </p>
-              <p className="project-card-reason">{project.reasonSnippet}</p>
             </div>
           </button>
         ))}

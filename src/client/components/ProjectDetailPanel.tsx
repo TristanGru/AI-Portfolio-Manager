@@ -1,6 +1,38 @@
-import type { ProjectDetail, ProjectStatus } from "../../shared/domain";
+import type { ProjectDetail, ProjectStatus, SignalRecord } from "../../shared/domain";
 import { MarkdownDocument } from "./MarkdownDocument";
 import { SignalComposer } from "./SignalComposer";
+
+const SIGNAL_TYPE_LABELS: Record<string, string> = {
+  feedback: "feedback",
+  note: "note",
+  idea: "idea",
+  "repo-state": "repo",
+};
+
+function signalAge(createdAt: string): string {
+  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+  if (days === 0) return "today";
+  if (days === 1) return "1d ago";
+  return `${days}d ago`;
+}
+
+function SignalList({ signals }: { signals: SignalRecord[] }) {
+  const manual = signals.filter((s) => s.source !== "repo-scanner" && s.type !== "repo-state");
+  if (manual.length === 0) return <p className="muted signal-empty">No signals yet — add one above.</p>;
+  return (
+    <ul className="signal-history">
+      {manual.slice(0, 6).map((signal) => (
+        <li key={signal.id} className="signal-item">
+          <span className={`signal-badge signal-badge--${signal.type}`}>
+            {SIGNAL_TYPE_LABELS[signal.type] ?? signal.type}
+          </span>
+          <span className="signal-summary">{signal.summary}</span>
+          <span className="signal-meta">{signalAge(signal.createdAt)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 type Props = {
   detail?: ProjectDetail;
@@ -55,7 +87,7 @@ export function ProjectDetailPanel({
         ) : null}
       </div>
 
-      {loading ? <p className="muted">Loading project memory...</p> : null}
+      {loading && !detail ? <p className="muted">Loading project memory...</p> : null}
       {error ? <p className="error-banner">{error}</p> : null}
 
       {!detail && !loading ? (
@@ -63,7 +95,7 @@ export function ProjectDetailPanel({
       ) : null}
 
       {detail ? (
-        <div className="detail-grid">
+        <div className={`detail-grid${loading ? " detail-grid--loading" : ""}`}>
           <article className="card emphasis-card">
             <p className="eyebrow">Current Recommendation</p>
             <h3>{topRecommendation?.actionType ?? "No recommendation"}</h3>
@@ -109,19 +141,10 @@ export function ProjectDetailPanel({
           </article>
 
           <article className="card">
-            <p className="eyebrow">Signal Composer</p>
+            <p className="eyebrow">Signals</p>
             <SignalComposer onSubmit={onCreateSignal} />
-          </article>
-
-          <article className="card">
-            <p className="eyebrow">Recent Signals</p>
-            <ul className="stack-list">
-              {detail.signals.slice(0, 8).map((signal) => (
-                <li key={signal.id}>
-                  <strong>{signal.type}</strong>: {signal.summary}
-                </li>
-              ))}
-            </ul>
+            <div className="signal-divider" />
+            <SignalList signals={detail.signals} />
           </article>
 
           <article className="card">

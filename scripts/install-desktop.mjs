@@ -59,7 +59,11 @@ const writeLauncherManifest = async () => {
   await copyIfPresent(path.join(projectRoot, ".env"), path.join(resourcesAppDir, ".env"));
   const packagedNodeModules = path.join(resourcesAppDir, "node_modules");
   await copyIfPresent(projectNodeModules, packagedNodeModules);
-  await fsp.rm(path.join(packagedNodeModules, "electron"), { recursive: true, force: true });
+  try {
+    await fsp.rm(path.join(packagedNodeModules, "electron"), { recursive: true, force: true });
+  } catch {
+    // locked by OS — electron binaries will be overwritten in place on next copy
+  }
 };
 
 const createDesktopShortcut = async () => {
@@ -94,7 +98,12 @@ const install = async () => {
   await ensurePathExists(electronDist, "Electron runtime");
   await ensurePathExists(projectNodeModules, "Project dependencies");
 
-  await fsp.rm(installRoot, { recursive: true, force: true });
+  try {
+    await fsp.rm(installRoot, { recursive: true, force: true });
+  } catch {
+    // Windows may hold handles on Electron binaries (Defender, indexer, etc.)
+    // Fall through — fsp.cp with force:true will overwrite in place.
+  }
   await fsp.mkdir(installRoot, { recursive: true });
   await fsp.cp(electronDist, installRoot, { recursive: true, force: true });
 

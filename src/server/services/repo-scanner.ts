@@ -20,6 +20,8 @@ export type RepoHeuristics = {
   heuristicSummary: string;
   isShallowClone: boolean;
   isGitRepo: boolean;
+  activityLastDays: number;
+  activitySessionsRecent: number;
 };
 
 const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".css", ".html"]);
@@ -183,6 +185,32 @@ const checkDepsPresent = async (projectPath: string): Promise<boolean> => {
   return false;
 };
 
+const readActivityLog = async (projectPath: string): Promise<{ lastDays: number; recentCount: number }> => {
+  const activityFile = path.join(projectPath, PROJECT_MEMORY_DIR, "activity.jsonl");
+  try {
+    const raw = await fs.readFile(activityFile, "utf8");
+    const cutoff = Date.now() - 14 * 24 * 3600 * 1000;
+    let recentCount = 0;
+    let mostRecentMs = 0;
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as { timestamp?: string };
+        if (!entry.timestamp) continue;
+        const ts = new Date(entry.timestamp).getTime();
+        if (ts > cutoff) recentCount++;
+        if (ts > mostRecentMs) mostRecentMs = ts;
+      } catch {
+        // skip malformed lines
+      }
+    }
+    const lastDays = mostRecentMs > 0 ? Math.floor((Date.now() - mostRecentMs) / (24 * 3600 * 1000)) : 999;
+    return { lastDays, recentCount };
+  } catch {
+    return { lastDays: 999, recentCount: 0 };
+  }
+};
+
 const buildHeuristicSummary = (
   h: Omit<RepoHeuristics, "heuristicSummary">
 ): string => {
@@ -210,6 +238,11 @@ const buildHeuristicSummary = (
     }
   }
 
+  if (h.activitySessionsRecent > 0) {
+    const actLabel = h.activityLastDays === 0 ? "session today" : `session ${h.activityLastDays}d ago`;
+    parts.push(`${h.activitySessionsRecent} logged (${actLabel})`);
+  }
+
   if (h.todoDensity > 0) parts.push(`${h.todoDensity} TODOs`);
   parts.push(`README ${h.readmeCompleteness}/4`);
   if (h.testsPresent) parts.push("tests");
@@ -227,11 +260,12 @@ export const buildRepoHeuristics = async (projectPath: string): Promise<RepoHeur
     // ignore walk errors
   }
 
-  const [todoDensity, readmeCompleteness, testsPresent, depsPresent] = await Promise.all([
+  const [todoDensity, readmeCompleteness, testsPresent, depsPresent, activityLog] = await Promise.all([
     countTodos(files, projectPath),
     checkReadmeCompleteness(projectPath),
     checkTestsPresent(projectPath),
-    checkDepsPresent(projectPath)
+    checkDepsPresent(projectPath),
+    readActivityLog(projectPath)
   ]);
 
   let gitVelocity = 0;
@@ -268,7 +302,9 @@ export const buildRepoHeuristics = async (projectPath: string): Promise<RepoHeur
     testsPresent,
     depsPresent,
     isShallowClone,
-    isGitRepo: gitRepo
+    isGitRepo: gitRepo,
+    activityLastDays: activityLog.lastDays,
+    activitySessionsRecent: activityLog.recentCount
   };
 
   return { ...partial, heuristicSummary: buildHeuristicSummary(partial) };
@@ -339,12 +375,26 @@ export const buildRepoSignals = async (projectId: string, projectPath: string): 
     });
   }
 
-  if (heuristics.gitVelocity === 0 && heuristics.gitLastCommitAgeDays > 28 && heuristics.isGitRepo && !heuristics.isShallowClone) {
+  if (heuristics.activitySessionsRecent > 0 && heuristics.activityLastDays < 7) {
     signals.push({
       id: createId("sig_repo"),
       type: "repo-state",
       source: "repo-scan",
-      summary: "No commits in 28 days. Project is dormant.",
+      summary: `Active work sessions logged: ${heuristics.activitySessionsRecent} session${heuristics.activitySessionsRecent > 1 ? "s" : ""} in the last 14 days. Last session ${heuristics.activityLastDays === 0 ? "today" : `${heuristics.activityLastDays}d ago`}.`,
+      evidenceRefs: [`repo:${projectId}:activity-log`],
+      freshnessScore: 0.95,
+      confidence: 0.9,
+      createdAt
+    });
+  }
+
+  const recentlyActive = heuristics.activityLastDays < 14;
+  if (heuristics.gitVelocity === 0 && heuristics.gitLastCommitAgeDays > 28 && heuristics.isGitRepo && !heuristics.isShallowClone && !recentlyActive) {
+    signals.push({
+      id: createId("sig_repo"),
+      type: "repo-state",
+      source: "repo-scan",
+      summary: "No commits in 28 days and no logged work sessions. Project is dormant.",
       evidenceRefs: [`repo:${projectId}:dormant`],
       freshnessScore: 0.85,
       confidence: 0.9,
