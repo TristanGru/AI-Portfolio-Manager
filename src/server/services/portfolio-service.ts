@@ -33,7 +33,6 @@ export const loadPortfolio = async (rootPath: string): Promise<PortfolioResponse
   const projects = await Promise.all(
     projectPaths.map(async (projectPath) => {
       const project = baseProjectSummary(rootPath, projectPath);
-      await ensureProjectMemory(project.name, projectPath);
       const snapshot = await readProjectSnapshot(rootPath, project);
       return snapshot.project;
     })

@@ -6,7 +6,7 @@ import { LoadPortfolioRequestSchema, CreateSignalRequestSchema, UpdateStatusRequ
 import { asAppError, AppError } from "./lib/errors.js";
 import { logError, logInfo } from "./lib/logger.js";
 import { findProject, loadPortfolio, readPortfolio } from "./services/portfolio-service.js";
-import { appendManualSignal, readProjectSnapshot, runProjectJudgment, updateProjectStatus } from "./services/project-memory-service.js";
+import { appendManualSignal, readProjectSnapshot, refreshProjectMemory, runProjectJudgment, updateProjectStatus } from "./services/project-memory-service.js";
 import { ensureAbsoluteDirectory } from "./services/path-utils.js";
 import { getWatcherStatus, startPortfolioWatch } from "./services/watcher-service.js";
 
@@ -117,7 +117,7 @@ export const createApp = () => {
         throw new AppError(404, "PATH_NOT_FOUND", "Project not found.");
       }
 
-      const snapshot = await readProjectSnapshot(rootPath, project);
+      const snapshot = await refreshProjectMemory(rootPath, project);
       await loadPortfolio(rootPath);
       res.json(snapshot);
     } catch (error) {

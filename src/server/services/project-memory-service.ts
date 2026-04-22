@@ -457,7 +457,43 @@ export const updateProjectStatus = async (
 export const readProjectSnapshot = async (
   rootPath: string,
   project: ProjectSummary
-): Promise<ProjectDetail> => refreshProjectMemory(rootPath, project);
+): Promise<ProjectDetail> => {
+  await ensureProjectMemory(project.name, project.path);
+
+  const [statusRecord, signals, recommendations, thesisMarkdown, decisionHistory] = await Promise.all([
+    readStatus(project.path),
+    readSignals(project.path),
+    readRecommendations(project.path),
+    readText(memoryPath(project.path, "project-thesis.md"), defaultThesis(project.name)),
+    readDecisions(project.path)
+  ]);
+
+  const [agentBriefMarkdown, nextTaskMarkdown] = await Promise.all([
+    readText(memoryPath(project.path, "tasks", "coding-agent-brief.md"), ""),
+    readText(memoryPath(project.path, "tasks", "next-task.md"), "")
+  ]);
+
+  const updatedProject: ProjectSummary = {
+    ...project,
+    status: statusRecord.status,
+    lastScannedAt: statusRecord.lastScannedAt,
+    topRecommendationType: recommendations[0]?.actionType ?? "investigate",
+    momentumScore: Math.round((recommendations[0]?.priorityScore ?? 0) * 100),
+    reasonSnippet: recommendations[0]?.rationale ?? "No recommendation yet."
+  };
+
+  return {
+    rootPath,
+    project: updatedProject,
+    thesisMarkdown,
+    agentBriefMarkdown,
+    signals: signals.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    recommendations,
+    decisionHistory,
+    nextTaskMarkdown,
+    updatedAt: statusRecord.lastScannedAt || new Date().toISOString()
+  };
+};
 
 export const readLatestRecommendations = async (projectPath: string): Promise<Recommendation[]> =>
   readRecommendations(projectPath);
